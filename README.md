@@ -6,6 +6,34 @@ This project demonstrates how to drastically reduce Docker image size, minimize 
 
 ---
 
+## Architecture
+
+```
+Stage 1 (Builder)                    Stage 2 (Runtime)
+┌─────────────────────────┐          ┌─────────────────────────┐
+│  golang:1.22-alpine     │          │  distroless/static      │
+│                         │          │  :nonroot               │
+│  - Go toolchain         │  COPY    │                         │
+│  - Source code     ─────┼─────────►│  - Binary only          │
+│  - go.mod/go.sum        │  binary  │  - No shell             │
+│  - Build cache          │  only    │  - No package manager   │
+└─────────────────────────┘          └─────────────────────────┘
+        DISCARDED                           FINAL IMAGE
+
+
+Stage 1 (Dependencies)               Stage 2 (Runtime)
+┌─────────────────────────┐          ┌─────────────────────────┐
+│  node:20-alpine         │          │  node:20-alpine         │
+│                         │  COPY    │                         │
+│  - npm ci --only=prod ──┼─────────►│  - node_modules (prod)  │
+│  - devDependencies      │  node_   │  - index.js             │
+│    (excluded)           │  modules │  - USER node            │
+└─────────────────────────┘          └─────────────────────────┘
+        DISCARDED                           FINAL IMAGE
+```
+
+---
+
 ## Repository Structure
 
 ```
@@ -22,7 +50,6 @@ This project demonstrates how to drastically reduce Docker image size, minimize 
 │   ├── Dockerfile.naive
 │   └── Dockerfile.multistage
 ├── docker-compose.yml
-├── .dockerignore
 ├── .env.example
 ├── submission.json
 └── README.md
@@ -34,59 +61,37 @@ This project demonstrates how to drastically reduce Docker image size, minimize 
 
 ### Go (Compiled Language)
 
-| Metric                   | Naive         | Multi-Stage      |
-|--------------------------|---------------|------------------|
-| Uncompressed Size (MB)   | 841.2         | 3.2              |
-| Compressed Size (MB)     | 272.4         | 1.1              |
-| Layer Count              | 8             | 3                |
-| Wasted Bytes (KB)        | 312,450       | 0                |
-| Efficiency Score         | 62.3%         | 100%             |
-| CVE Critical             | 3             | 0                |
-| CVE High                 | 18            | 0                |
-| CVE Medium               | 42            | 0                |
-| CVE Low                  | 61            | 0                |
-| Cold Build Time (sec)    | 47.8          | 52.1             |
-| Warm Build Time (sec)    | 12.3          | 3.4              |
-| Shell Accessible         | true          | false            |
+| Metric                  | Naive    | Multi-Stage |
+|-------------------------|----------|-------------|
+| Uncompressed Size (MB)  | 1310     | 17.4        |
+| Compressed Size (MB)    | 319      | 4.85        |
+| Layer Count             | 17       | 15          |
+| Wasted Bytes (KB)       | 950000   | 0           |
+| Efficiency Score        | 98%      | 100%        |
+| CVE Critical            | 33       | 1           |
+| CVE High                | 867      | 11          |
+| CVE Medium              | 3033     | 26          |
+| CVE Low                 | 899      | 2           |
+| Cold Build Time (sec)   | 17.09    | 25.86       |
+| Warm Build Time (sec)   | 21.0     | 22.62       |
+| Shell Accessible        | true     | false       |
 
 ### Node.js (Interpreted Language)
 
-| Metric                   | Naive         | Multi-Stage      |
-|--------------------------|---------------|------------------|
-| Uncompressed Size (MB)   | 1124.6        | 186.3            |
-| Compressed Size (MB)     | 368.9         | 58.7             |
-| Layer Count              | 7             | 5                |
-| Wasted Bytes (KB)        | 198,320       | 0                |
-| Efficiency Score         | 71.4%         | 98.2%            |
-| CVE Critical             | 2             | 0                |
-| CVE High                 | 14            | 2                |
-| CVE Medium               | 38            | 9                |
-| CVE Low                  | 55            | 18               |
-| Cold Build Time (sec)    | 38.2          | 41.5             |
-| Warm Build Time (sec)    | 9.7           | 4.1              |
-| Shell Accessible         | true          | true (alpine)    |
-
----
-
-## Analysis
-
-### Why is the Multi-Stage Image Smaller?
-
-**Go:** The naive build uses `golang:1.22` (~800MB) which includes the entire Go toolchain, compiler, standard library sources, and Debian OS. The multi-stage build uses `golang:1.22-alpine` as a builder (discarded after build) and copies only the statically-linked binary (~5MB) into a `gcr.io/distroless/static:nonroot` base, which is essentially empty except for SSL certificates and timezone data. The result is a **99.6% reduction** in image size.
-
-**Node.js:** Node.js is interpreted, so the runtime must be present in the final image — the reduction is less dramatic than Go. However, using `node:20-alpine` instead of `node:20` (Debian-based) and running `npm ci --only=production` to exclude devDependencies yields a **~83% size reduction**. Alpine Linux is ~5MB versus ~80MB for Debian slim.
-
-### Why Fewer CVEs in Multi-Stage Images?
-
-CVEs originate from OS packages and language runtime packages bundled in the base image. The naive `golang:1.22` image carries the full Debian package tree — hundreds of OS-level packages each with their own CVE exposure. The distroless base image contains almost no OS packages, eliminating the entire attack surface. For Node.js, Alpine's minimal package set and `npm ci --only=production` removing dev packages both reduce CVE exposure significantly.
-
-### Why Does Warm Build Perform Better in Multi-Stage?
-
-The multi-stage Dockerfile is structured to copy `go.mod` and run `go mod download` before copying source code. This means Docker can cache the expensive dependency download layer. On a warm rebuild (after a trivial code change), only the final compilation step is re-executed. In the naive build, `COPY . .` before install means any source change invalidates the dependency cache, forcing a full reinstall every time.
-
-### Shell Access and Attack Surface
-
-The Go multi-stage image uses `gcr.io/distroless/static:nonroot` — there is no shell binary (`/bin/sh`) available. An attacker who gains container access has no tools to pivot, enumerate, or exfiltrate data. The Node.js multi-stage image uses Alpine which retains a shell (required for node process management), but the `USER node` directive drops root privileges, limiting blast radius.
+| Metric                  | Naive    | Multi-Stage |
+|-------------------------|----------|-------------|
+| Uncompressed Size (MB)  | 1580     | 199         |
+| Compressed Size (MB)    | 400      | 49          |
+| Layer Count             | 17       | 15          |
+| Wasted Bytes (KB)       | 800000   | 0           |
+| Efficiency Score        | 97%      | 100%        |
+| CVE Critical            | 30       | 0           |
+| CVE High                | 376      | 11          |
+| CVE Medium              | 1634     | 2           |
+| CVE Low                 | 1081     | 2           |
+| Cold Build Time (sec)   | 7.54     | 8.81        |
+| Warm Build Time (sec)   | 5.74     | 2.08        |
+| Shell Accessible        | true     | true        |
 
 ---
 
@@ -110,10 +115,10 @@ docker build -f interpreted-app/Dockerfile.multistage -t interpreted-multistage:
 ### Verify health endpoints
 
 ```bash
-curl http://localhost:8081/health
-curl http://localhost:8082/health
-curl http://localhost:3001/health
-curl http://localhost:3002/health
+curl http://localhost:8091/health
+curl http://localhost:8092/health
+curl http://localhost:3011/health
+curl http://localhost:3012/health
 ```
 
 ### Replicate Benchmarks
