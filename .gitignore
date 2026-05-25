@@ -1,0 +1,38 @@
+# Environment files
+.env
+.env.*
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# Docker
+*.tar
+
+# Build files
+dist/
+build/
+bin/
+
+# Go build files
+*.exe
+*.out
+
+# Dependency directories
+vendor/
+
+# Temporary files
+tmp/
+temp/
+
+# OneDrive metadata
+*.lnk
