@@ -1,0 +1,12 @@
+{
+  "name": "interpreted-app",
+  "version": "1.0.0",
+  "description": "Simple health check server",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

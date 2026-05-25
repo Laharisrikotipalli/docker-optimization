@@ -1,0 +1,34 @@
+version: "3.8"
+
+services:
+  compiled-naive:
+    build:
+      context: ./compiled-app
+      dockerfile: Dockerfile.naive
+    image: compiled-naive:latest
+    ports:
+      - "8091:8080"
+
+  compiled-multistage:
+    build:
+      context: ./compiled-app
+      dockerfile: Dockerfile.multistage
+    image: compiled-multistage:latest
+    ports:
+      - "8092:8080"
+
+  interpreted-naive:
+    build:
+      context: ./interpreted-app
+      dockerfile: Dockerfile.naive
+    image: interpreted-naive:latest
+    ports:
+      - "3011:3000"
+
+  interpreted-multistage:
+    build:
+      context: ./interpreted-app
+      dockerfile: Dockerfile.multistage
+    image: interpreted-multistage:latest
+    ports:
+      - "3012:3000"
