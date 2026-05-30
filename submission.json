@@ -18,7 +18,7 @@
     "multistage": {
       "uncompressed_size_mb": 17.4,
       "compressed_size_mb": 4.85,
-      "layer_count": 15,
+      "layer_count": 18,
       "wasted_bytes_kb": 0,
       "efficiency_score_percent": 100,
       "cve_critical": 1,

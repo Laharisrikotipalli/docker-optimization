@@ -9,4 +9,3 @@ app.get('/health', (req, res) => {
 app.listen(port, () => {
 	console.log(`Server listening on port ${port}`);
 });
-// warm build test
